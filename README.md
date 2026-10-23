@@ -1,10 +1,10 @@
 # CodeReviewer
 
-Release candidate: the web application passes local checks, but the training dependency audit has unresolved advisories. See [verification and release blockers](docs/verification.md) before publishing or deploying.
+See [verification](docs/verification.md) for tested commands, dependency audit results and the remaining GPU/serving validation limits.
 
 CodeReviewer reviews pasted source code and Git diffs using a language model. A React interface submits authenticated requests to an Express API, which stores review history in PostgreSQL and calls an OpenAI-compatible inference server. Model responses are validated as structured findings; the backend computes a deterministic severity-based score.
 
-The repository also contains the original Qwen2 QLoRA training implementation, reviewed for portability and privacy. **Datasets, adapters, checkpoints, model weights, and user records are not distributed.** A compatible running model service is required for actual AI reviews. No review-accuracy benchmark is claimed.
+The repository also contains a Qwen2 QLoRA pipeline, derived from the original implementation and reviewed for portability, privacy and dependency compatibility. **Datasets, adapters, checkpoints, model weights, and user records are not distributed.** A compatible running model service is required for actual AI reviews. No review-accuracy benchmark is claimed.
 
 ## Architecture
 
@@ -29,9 +29,9 @@ See [architecture and request diagrams](docs/architecture.md), [API contract](ba
 - Validated findings with severity, category, source location, explanation, and suggested fix.
 - Dashboard aggregates and real review findings; empty workspaces show no fabricated metrics.
 - Inference timeouts, bounded concurrent requests, request limits, and persistent failed-review status.
-- Local preprocessing, train/validation/test loading, assistant-only loss masking, Unsloth LoRA training, adapter merging, and interactive local inference.
+- Local preprocessing, train/validation/test loading, assistant-only loss masking, Transformers/PEFT QLoRA training, an explicit optional Unsloth backend, adapter merging, and interactive local inference.
 
-The frontend uses React 19, TypeScript 6, Vite 8 and plain CSS. The backend uses Express 4, Prisma 6, PostgreSQL, Zod, JWT and bcrypt. Training uses PyTorch, Unsloth, Transformers, TRL and PEFT. Tailwind is not a dependency. Repository URLs are metadata: there is no GitHub webhook, repository cloning, or automatic PR commenting.
+The frontend uses React 19, TypeScript 6, Vite 8 and plain CSS. The backend uses Express 4, Prisma 6, PostgreSQL, Zod, JWT and bcrypt. The default training environment uses PyTorch, Transformers, TRL, PEFT and bitsandbytes. The historical Unsloth backend remains explicitly selectable in a separately managed environment. Tailwind is not a dependency. Repository URLs are metadata: there is no GitHub webhook, repository cloning, or automatic PR commenting.
 
 ## Local installation
 
@@ -97,6 +97,8 @@ Inspect the verified settings without installing GPU dependencies or loading a m
 python -m src.training.train --config configs/train.json --validate-only
 python -m src.training.preprocess --help
 ```
+
+The default backend is now `peft`, because current Unsloth constraints conflict with the patched dataset version. [Training migration details](docs/training.md#backend-and-dependency-migration) explain this change and the retained Unsloth option.
 
 The actual default is a **1,024-token context**, rank/alpha 16, 4-bit loading, three epochs, learning rate `2e-4`, microbatch 1 and accumulation 16 on one device. Historical notes mentioning 2,048 tokens do not match the configuration. See [training documentation](docs/training.md) before acquiring data or installing CUDA dependencies.
 

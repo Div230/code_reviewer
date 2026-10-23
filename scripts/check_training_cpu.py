@@ -19,6 +19,7 @@ def main():
     from src.training.config import ModelConfig, TrainingConfig
     from src.training.preprocess import format_example
     from src.training.trainer import create_trainer
+    from src.training.model import load_model
 
     torch.manual_seed(42)
     vocab = {
@@ -76,10 +77,24 @@ def main():
     )
     dataset = Dataset.from_list([row, row])
     with tempfile.TemporaryDirectory() as root:
-        config = replace(TrainingConfig(), output_dir=Path(root), bf16=False, fp16=False)
-        trainer = create_trainer(
-            model, tokenizer, dataset, dataset, config, replace(ModelConfig(), max_seq_length=128)
+        base_path = Path(root) / "synthetic-base"
+        model.save_pretrained(str(base_path), safe_serialization=True)
+        tokenizer.save_pretrained(str(base_path))
+        model_cfg = replace(
+            ModelConfig(),
+            model_name=str(base_path),
+            load_in_4bit=False,
+            lora_rank=4,
+            lora_alpha=4,
+            max_seq_length=128,
         )
+        tokenizer, model = load_model(model_cfg)
+        config = replace(TrainingConfig(), output_dir=Path(root) / "run", bf16=False, fp16=False)
+        trainer = create_trainer(model, tokenizer, dataset, dataset, config, model_cfg)
+        if trainer.args.warmup_steps != config.warmup_ratio:
+            raise RuntimeError("Warmup ratio changed during TrainingArguments migration")
+        if not any(parameter.requires_grad for parameter in model.parameters()):
+            raise RuntimeError("PEFT adapter has no trainable parameters")
         batch = next(iter(trainer.get_train_dataloader()))
         supervised = batch["labels"] != -100
         if not bool(supervised.any()):

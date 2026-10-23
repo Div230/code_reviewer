@@ -89,7 +89,8 @@ jobs:
       - run: python -m compileall -q src tests scripts
       - run: python -m unittest discover -s tests -v
       - run: python -m src.training.train --config configs/train.json --validate-only
-      - run: pip-audit -r requirements-training.txt --no-deps --disable-pip
+      - run: pip-audit -r requirements-training.txt --require-hashes --disable-pip
+      - run: pip-audit -r requirements-cpu.txt --require-hashes --disable-pip --vulnerability-service osv --strict
   ml-interfaces:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -104,8 +105,8 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - run: python -m pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
-      - run: python -m pip install datasets==4.3.0 transformers==4.56.2 tokenizers==0.22.2 huggingface-hub==0.36.2 trl==0.19.1 peft==0.18.1 accelerate==1.13.0
+      - run: python -m pip install --require-hashes -r requirements-cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu
+      - run: python -m pip check
       - run: python -m unittest discover -s tests -v
       - run: python -m scripts.check_training_cpu
   hygiene:

@@ -2,14 +2,14 @@
 
 ## Verified configuration
 
-The source uses `Qwen/Qwen2-1.5B-Instruct`, Unsloth `FastLanguageModel`, 4-bit loading, PEFT LoRA and TRL supervised fine-tuning. The checked-in `configs/train.json` is authoritative for the release command. No weights or downloaded tokenizer files are included.
+The default source path uses `Qwen/Qwen2-1.5B-Instruct`, Transformers, bitsandbytes 4-bit NF4 loading with double quantization, PEFT LoRA and TRL supervised fine-tuning. The historical Unsloth loader remains a separate explicit backend. The checked-in `configs/train.json` is authoritative for the release command. No weights or downloaded tokenizer files are included.
 
 | Setting | Value |
 | --- | --- |
 | Context length | 1024 tokens |
 | LoRA rank / alpha / dropout | 16 / 16 / 0.0 |
 | Targets | q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj |
-| Bias / gradient checkpointing | none / unsloth |
+| Backend / bias / gradient checkpointing | peft / none / standard |
 | Epochs | 3 |
 | Microbatch / accumulation | 1 / 16 |
 | Effective batch | 16 on one device; multiplied by distributed world size |
@@ -40,22 +40,45 @@ The script deduplicates identical user prompts before splitting approximately 96
 
 `load_datasets()` accepts either these JSONL files or legacy Hugging Face `save_to_disk` directories (`train_50k`, `val`, `test`) under the configured dataset root. It validates messages, rejects reserved Qwen chat tokens and duplicate user inputs across splits, and strips unrelated columns. The public CPU tests use entirely synthetic strings.
 
+## Backend and dependency migration
+
+The original and initial release-candidate stack used Unsloth. The initial lock produced 15 pip-audit advisories. Even Unsloth 2026.10.7 declares `datasets<5.0.0`, while the dataset path-traversal fix starts at 5.0.1. The default environment therefore now uses native Transformers + PEFT rather than forcing incompatible metadata or suppressing advisories. See [upstream Unsloth constraints](https://github.com/unslothai/unsloth/blob/main/pyproject.toml) and [the advisory](https://osv.dev/vulnerability/PYSEC-2026-3716).
+
+`configs/train.json` explicitly selects `model.backend=peft` and standard gradient checkpointing. The base model, sequence length, rank/alpha/targets, batch/accumulation, learning rate, warmup ratio, epochs, seed and reporting settings are preserved. Kernel implementations and loader behavior differ; historical checkpoints/losses are not asserted to reproduce bit-for-bit. Current Transformers represents a fractional warmup as `warmup_steps=0.03`; the trainer maps the existing `warmup_ratio` config accordingly and keeps compatibility with the older argument when present.
+
+To retain the historical backend, set `model.backend=unsloth` and optionally `model.use_gradient_checkpointing=unsloth` in a separate config/environment. This loader is retained and mock-tested, but Unsloth is deliberately absent from the audited default lock. Do not install it over this environment: its current dataset constraints conflict with it. No currently audited Unsloth environment is supplied or claimed. The backend fails with an explicit explanation when the optional package is absent. No vulnerable legacy lock is shipped as an approved alternative.
+
 ## Environment
 
-Use a separate Linux CUDA Python 3.11/3.12 environment for training. `requirements-training.in` pins the candidate direct stack. `requirements-training.txt` contains a fully resolved Python 3.12 candidate lock. Resolution and a tiny CPU forward pass were checked; full CUDA installation/loading was not. The lock has unresolved security advisories and must not be treated as an approved production environment. See [verification](verification.md). Install a CUDA-compatible PyTorch/Unsloth stack matching the driver and GPU; do not install serving and training dependencies into the same environment.
+Use a separate Linux CUDA Python 3.12 environment for training; the source also targets Python 3.11, but the supplied resolution and local validation use 3.12. `requirements-training.in` pins direct dependencies, including a security floor for fsspec. `requirements-training.txt` pins and hashes the full resolved GPU candidate environment. The current lock passes pip-audit; that does not establish CUDA runtime compatibility or absence of every vulnerability. No full GPU environment, Unsloth runtime or real model training was installed/run for this repair.
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-training.in
+python -m pip install --require-hashes -r requirements-training.txt
 python -m pip check
 python -m src.training.train --config configs/train.json --validate-only
 python -m src.training.train --config configs/train.json
 ```
 
-Do not assume the installed private environment is compatible: its Transformers version exceeded the installed Unsloth package's declared upper bound during release inspection. The release candidate pins Transformers 4.56.2 with TRL 0.19.1 instead. Package metadata resolution, imports, CUDA kernels, and actual model loading are separate checks.
+The default GPU candidate pins torch 2.14.1, transformers 5.20.2, TRL 1.16.0, PEFT 0.21.2, datasets 5.1.0, fsspec 2026.7.0, accelerate 1.15.0 and bitsandbytes 0.50.2. W&B remains at 0.27.0. Review GPU driver/CUDA compatibility before installing the GPU stack. The bitsandbytes path selects BF16 or FP16 compute according to hardware capability and fails before model acquisition if no CUDA GPU is available.
 
-GPU memory depends on GPU architecture, kernels, padding, sequence lengths and optimizer. Four-bit base weights reduce memory but do not make the pipeline CPU-only. No measured minimum VRAM is claimed. BF16 requires appropriate hardware; explicitly edit precision settings for a different GPU. First validate with a small permitted dataset and monitor memory before a full run.
+GPU memory depends on architecture, kernels, padding, sequence lengths and optimizer. Four-bit weights do not make training CPU-only. No measured minimum VRAM is claimed. The default training precision is BF16 and requires appropriate hardware; explicitly edit precision settings for a different GPU. Do not mix serving dependencies into this environment.
+
+For CPU-only interface verification, use a separate environment and the hashed CPU lock:
+
+```bash
+python3.12 -m venv .venv-cpu
+source .venv-cpu/bin/activate
+python -m pip install --require-hashes -r requirements-cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu
+python -m pip check
+python -m unittest discover -s tests -v
+HF_HUB_OFFLINE=1 python -m scripts.check_training_cpu
+```
+
+The extra index supplies the pinned `+cpu` PyTorch distribution; hashes restrict the accepted wheels. No CUDA libraries, downloaded models or external datasets are needed. The optional forward smoke constructs and briefly saves/reloads a tiny random model inside a temporary directory, exercises the real native PEFT loader and LoRA attachment, then verifies a finite loss without an optimizer step.
+
+Regenerate the locks from repository root with `uv pip compile requirements-training.in --python-version 3.12 --generate-hashes -o requirements-training.txt` and `uv pip compile requirements-cpu.in --torch-backend cpu --python-version 3.12 --generate-hashes --emit-index-url -o requirements-cpu.txt`, then rerun both audits and the CPU checks. Do not solve future advisories by adding ignore flags or silently forcing incompatible dependencies.
 
 ## Running and evaluation
 
@@ -79,6 +102,6 @@ Merging requires more memory than quantized training, loads a non-quantized BF16
 
 ## Optional CPU interface smoke test
 
-`python -m scripts.check_training_cpu` constructs a tiny randomly initialized Qwen2 model and an entirely local synthetic tokenizer, then exercises real dataset preprocessing, TRL, collator labels and a single finite-loss forward pass. It never downloads a tokenizer/model, never performs an optimizer step and does not validate Unsloth or CUDA. The regular unittest suite additionally checks model-loading arguments using a mocked Unsloth interface. GPU initialization and fine-tuned review quality remain unverified.
+`python -m scripts.check_training_cpu` constructs a tiny randomly initialized Qwen2 model and an entirely local synthetic tokenizer, then exercises real dataset preprocessing, TRL, collator labels and a single finite-loss forward pass. It never downloads a tokenizer/model, never performs an optimizer step and does not validate Unsloth or CUDA. The synthetic model and tokenizer are saved/reloaded only inside a temporary directory to exercise the actual safe local-loading code. The regular unittest suite additionally checks model-loading arguments using a mocked Unsloth interface. GPU initialization and fine-tuned review quality remain unverified.
 
 For a reproducible model acquisition, pin an exact model revision in a local model snapshot and set `model_name` to that snapshot. The default remote model name has no pinned revision; historical model/data snapshot hashes were not recorded, so bit-for-bit reproduction of earlier checkpoints is not possible from this source alone.

@@ -17,6 +17,8 @@ class DataConfig:
 
 @dataclass(frozen=True)
 class ModelConfig:
+    backend: str = "peft"
+
     # Base model
     model_name: str = "Qwen/Qwen2-1.5B-Instruct"
 
@@ -33,7 +35,7 @@ class ModelConfig:
     bias: str = "none"
 
     # Gradient checkpointing
-    use_gradient_checkpointing: str = "unsloth"
+    use_gradient_checkpointing: str = "standard"
 
     # Randomness
     seed: int = 42
@@ -129,6 +131,12 @@ def load_config(path=None):
                 )
         result.append(cls(**values))
     data_cfg, model_cfg, train_cfg = result
+    if model_cfg.backend not in {"peft", "unsloth"}:
+        raise ValueError("model.backend must be peft or unsloth")
+    if model_cfg.use_gradient_checkpointing not in {"standard", "unsloth", "none"}:
+        raise ValueError("Invalid gradient checkpointing mode")
+    if model_cfg.backend == "peft" and model_cfg.use_gradient_checkpointing == "unsloth":
+        raise ValueError("Unsloth checkpointing requires the unsloth backend")
     if model_cfg.max_seq_length < 16 or model_cfg.lora_rank < 1 or model_cfg.lora_alpha < 1:
         raise ValueError("Invalid context length or LoRA configuration")
     if train_cfg.learning_rate <= 0 or train_cfg.num_train_epochs <= 0:

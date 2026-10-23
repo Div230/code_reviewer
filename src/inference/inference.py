@@ -59,6 +59,8 @@ def generate(
         return_tensors="pt",
     ).to(model.device)
 
+    if inputs["input_ids"].shape[-1] + max_new_tokens > context_limit:
+        raise ValueError("Prompt plus generated tokens exceeds --max-seq-length")
     with torch.inference_mode():
         outputs = model.generate(
             **inputs,
@@ -116,16 +118,21 @@ def main():
     parser.add_argument("--model", required=True)
     parser.add_argument("--max-seq-length", type=int, default=1024)
     args = parser.parse_args()
-    from unsloth import FastLanguageModel
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    global model, tokenizer
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=args.model,
-        max_seq_length=args.max_seq_length,
-        load_in_4bit=True,
+    global model, tokenizer, context_limit
+    context_limit = args.max_seq_length
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=False)
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model,
         trust_remote_code=False,
+        use_safetensors=True,
+        dtype=(torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16)
+        if torch.cuda.is_available()
+        else torch.float32,
+        device_map="auto",
     )
-    FastLanguageModel.for_inference(model)
     model.eval()
     print("=" * 60)
     print("Code Reviewer Chat")

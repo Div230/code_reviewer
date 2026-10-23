@@ -32,15 +32,19 @@ def main(argv=None):
             )
         )
         return
-    # Unsloth must initialize before transformers/TRL imports.
+    # Optional Unsloth patches must initialize before transformers/TRL.
     from .model import load_model
+
+    if model_cfg.backend == "unsloth":
+        tokenizer, model = load_model(model_cfg)
     from .dataset import load_datasets
     from .trainer import create_trainer
 
     if config.output_dir.exists() and any(config.output_dir.iterdir()) and not args.resume:
         parser.error("Output directory is nonempty; use --resume or choose another output_dir")
     train_ds, val_ds, test_ds = load_datasets(data_cfg)
-    tokenizer, model = load_model(model_cfg)
+    if model_cfg.backend != "unsloth":
+        tokenizer, model = load_model(model_cfg)
     trainer = create_trainer(model, tokenizer, train_ds, val_ds, config, model_cfg)
     config.output_dir.mkdir(parents=True, exist_ok=True)
     (config.output_dir / "run-config.json").write_text(

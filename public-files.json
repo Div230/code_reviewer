@@ -93,6 +93,8 @@
   "frontend/vite.config.ts",
   "public-files.json",
   "pyproject.toml",
+  "requirements-cpu.in",
+  "requirements-cpu.txt",
   "requirements-dev.txt",
   "requirements-training.in",
   "requirements-training.txt",

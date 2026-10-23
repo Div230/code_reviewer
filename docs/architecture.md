@@ -54,9 +54,10 @@ flowchart LR
   Format --> Dedup[Deduplicate user inputs before split]
   Dedup --> Splits[96/2/2 train / validation / test]
   Splits --> Load[Local dataset loader and overlap validation]
-  Base[Qwen2-1.5B-Instruct + 4-bit loading] --> LoRA[Unsloth LoRA adapters]
+  Base[Qwen2-1.5B-Instruct + 4-bit loading] --> LoRA[Transformers + PEFT LoRA adapters]
   Load --> Trainer[TRL SFTTrainer + assistant-only labels]
   LoRA --> Trainer
+  Legacy[Optional separately managed Unsloth backend] --> Trainer
   Trainer --> Eval[Validation/test loss on final checkpoint]
   Trainer --> Save[Local adapter + tokenizer + config]
   Save --> Merge[Explicit PEFT merge into safetensors]

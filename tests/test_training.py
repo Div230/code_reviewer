@@ -31,6 +31,8 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertEqual(training.learning_rate, 2e-4)
         self.assertEqual(training.report_to, "none")
+        self.assertEqual(model.backend, "peft")
+        self.assertEqual(model.use_gradient_checkpointing, "standard")
 
     def test_config_rejects_unknown_fields(self):
         with tempfile.TemporaryDirectory() as root:

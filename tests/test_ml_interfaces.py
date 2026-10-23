@@ -7,7 +7,7 @@ import sys
 import tempfile
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from src.training.config import DataConfig, ModelConfig
 from src.training.preprocess import format_example
 
@@ -32,7 +32,7 @@ class ModelWiringTests(unittest.TestCase):
         fake.FastLanguageModel = FastLanguageModel
         with patch.dict(sys.modules, {"unsloth": fake}):
             module = importlib.import_module("src.training.model")
-            config = ModelConfig(load_in_4bit=False, lora_rank=8, lora_alpha=32)
+            config = ModelConfig(backend="unsloth", load_in_4bit=False, lora_rank=8, lora_alpha=32)
             result = module.load_model(config)
             self.assertEqual(result, (tokenizer, "synthetic-model"))
             self.assertFalse(calls["load"]["load_in_4bit"])
@@ -41,6 +41,43 @@ class ModelWiringTests(unittest.TestCase):
             self.assertEqual(calls["peft"]["r"], 8)
             self.assertEqual(calls["peft"]["lora_alpha"], 32)
             self.assertIn("{% generation %}", tokenizer.chat_template)
+        sys.modules.pop("src.training.model", None)
+
+    def test_native_peft_configuration_without_downloads(self):
+        tokenizer = types.SimpleNamespace(pad_token_id=1, chat_template=None)
+        base = Mock()
+        base.config = types.SimpleNamespace(use_cache=True)
+        transformers = types.ModuleType("transformers")
+        transformers.AutoModelForCausalLM = types.SimpleNamespace(
+            from_pretrained=Mock(return_value=base)
+        )
+        transformers.AutoTokenizer = types.SimpleNamespace(
+            from_pretrained=Mock(return_value=tokenizer)
+        )
+        transformers.BitsAndBytesConfig = Mock()
+        transformers.set_seed = Mock()
+        peft = types.ModuleType("peft")
+        peft.LoraConfig = Mock(return_value="adapter-config")
+        peft.get_peft_model = Mock(return_value="adapted-model")
+        peft.prepare_model_for_kbit_training = Mock()
+        torch = types.ModuleType("torch")
+        torch.cuda = types.SimpleNamespace(is_available=lambda: False)
+        with patch.dict(sys.modules, {"torch": torch, "transformers": transformers, "peft": peft}):
+            module = importlib.import_module("src.training.model")
+            result = module.load_model(ModelConfig(load_in_4bit=False))
+            self.assertEqual(result, (tokenizer, "adapted-model"))
+            transformers.set_seed.assert_called_once_with(42)
+            kwargs = transformers.AutoModelForCausalLM.from_pretrained.call_args.kwargs
+            self.assertFalse(kwargs["trust_remote_code"])
+            self.assertTrue(kwargs["use_safetensors"])
+            self.assertFalse(base.config.use_cache)
+            peft.prepare_model_for_kbit_training.assert_not_called()
+            self.assertEqual(peft.LoraConfig.call_args.kwargs["r"], 16)
+            self.assertEqual(peft.LoraConfig.call_args.kwargs["lora_alpha"], 16)
+            base.gradient_checkpointing_enable.assert_called_once()
+            with self.assertRaisesRegex(RuntimeError, "CUDA GPU"):
+                module.load_model(ModelConfig(load_in_4bit=True))
+            self.assertEqual(transformers.AutoTokenizer.from_pretrained.call_count, 1)
         sys.modules.pop("src.training.model", None)
 
     @unittest.skipUnless(
