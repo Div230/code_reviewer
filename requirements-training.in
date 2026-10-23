@@ -2,7 +2,7 @@
 unsloth==2026.5.5
 unsloth-zoo==2026.5.3
 torch==2.10.0
-transformers==4.56.2
+transformers==4.57.6
 trl==0.19.1
 peft==0.18.1
 datasets==4.3.0
