@@ -70,15 +70,15 @@ For CPU-only interface verification, use a separate environment and the hashed C
 ```bash
 python3.12 -m venv .venv-cpu
 source .venv-cpu/bin/activate
-python -m pip install --require-hashes -r requirements-cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu
+python -m pip install --require-hashes -r requirements-cpu.txt
 python -m pip check
 python -m unittest discover -s tests -v
 HF_HUB_OFFLINE=1 python -m scripts.check_training_cpu
 ```
 
-The extra index supplies the pinned `+cpu` PyTorch distribution; hashes restrict the accepted wheels. No CUDA libraries, downloaded models or external datasets are needed. The optional forward smoke constructs and briefly saves/reloads a tiny random model inside a temporary directory, exercises the real native PEFT loader and LoRA attachment, then verifies a finite loss without an optimizer step.
+Both the input and generated CPU requirements declare PyTorch's official CPU index. The file therefore installs with plain `pip install -r requirements-cpu.txt`, without a hidden command-line index flag. That index supplies the pinned `+cpu` PyTorch distribution; hashes restrict the accepted wheels. No CUDA libraries, downloaded models or external datasets are needed. The optional forward smoke constructs and briefly saves/reloads a tiny random model inside a temporary directory, exercises the real native PEFT loader and LoRA attachment, then verifies a finite loss without an optimizer step.
 
-Regenerate the locks from repository root with `uv pip compile requirements-training.in --python-version 3.12 --generate-hashes -o requirements-training.txt` and `uv pip compile requirements-cpu.in --torch-backend cpu --python-version 3.12 --generate-hashes --emit-index-url -o requirements-cpu.txt`, then rerun both audits and the CPU checks. Do not solve future advisories by adding ignore flags or silently forcing incompatible dependencies.
+Regenerate the locks from repository root with `uv pip compile requirements-training.in --python-version 3.12 --generate-hashes -o requirements-training.txt` and `uv pip compile requirements-cpu.in --torch-backend cpu --index-strategy unsafe-best-match --python-version 3.12 --generate-hashes --emit-index-url -o requirements-cpu.txt`, then rerun both audits and the CPU checks. Do not solve future advisories by adding ignore flags or silently forcing incompatible dependencies.
 
 ## Running and evaluation
 

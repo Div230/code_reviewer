@@ -116,6 +116,7 @@
   "src/training/preprocess.py",
   "src/training/train.py",
   "src/training/trainer.py",
+  "tests/test_dependency_locks.py",
   "tests/test_ml_interfaces.py",
   "tests/test_training.py"
 ]

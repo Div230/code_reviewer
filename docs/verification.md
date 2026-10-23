@@ -11,11 +11,12 @@ This is a prepared release candidate. The previously failing training dependency
 | Frontend | TypeScript checking, production build and source-scoped lint pass |
 | Prisma | Client generation, schema validation and initial migration into a clean local PostgreSQL database pass |
 | API startup | Compiled server starts, liveness responds and SIGTERM exits cleanly; missing secret and unavailable database fail safely |
-| Python | 12 synthetic unittest tests pass in the patched CPU environment; minimal Python runs 11 and skips the dataset-dependent test |
+| Python | 13 synthetic unittest tests pass in the patched CPU environment; minimal Python runs 12 and skips the dataset-dependent test |
 | Training interfaces | Strict config parsing, local data loader, native PEFT loading, mocked optional Unsloth loading arguments, formatting and assistant loss masking pass |
 | Tiny CPU model | Real tokenizer, TRL trainer/dataloader/collator and finite-loss forward pass succeed with a tiny random Qwen2 model; no downloads or optimizer steps |
 | Python lint/format/syntax | Ruff and compileall pass |
 | npm vulnerability audits | Backend 0; frontend 0 reported advisories after updates |
+| CPU pip installation | Verified in a fresh Python 3.12 environment using only the hash-pinned requirements file; CPU index is embedded in the file |
 | Training dependency resolution | Python 3.12 candidate lock resolves successfully; installed private GPU environment was not modified |
 | Training vulnerability audit | PASS: no known vulnerabilities in the patched default stack; CPU lock also passes the OSV audit, including its +cpu build; see [audit details](dependency-audit.md) |
 | Secret/artifact scanning | Explicit file manifest and common-pattern checks, plus Gitleaks 8.24.3; final export results recorded in the private audit |
