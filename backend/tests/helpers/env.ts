@@ -1,0 +1,5 @@
+process.env.NODE_ENV = 'test'
+process.env.DATABASE_URL ??= 'postgresql://codereviewer:codereviewer@localhost:5432/codereviewer_test?schema=public'
+process.env.JWT_SECRET ??= 'test-secret-with-enough-length-for-jwt'
+process.env.MODEL_API_URL ??= 'http://localhost:8000/v1/chat/completions'
+process.env.MODEL_NAME ??= 'codereviewer-test'

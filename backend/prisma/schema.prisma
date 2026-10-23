@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ReviewStatus {
+  PENDING
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
+enum ReviewInputType {
+  CODE
+  DIFF
+  FILE
+}
+
+enum FindingSeverity {
+  CRITICAL
+  WARNING
+  INFO
+  SUGGESTION
+}
+
+enum FindingCategory {
+  SECURITY
+  CORRECTNESS
+  PERFORMANCE
+  CODE_QUALITY
+  MAINTAINABILITY
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  projects     Project[]
+  reviews      Review[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([email])
+}
+
+model Project {
+  id            String   @id @default(cuid())
+  name          String
+  repository    String?
+  defaultBranch String   @default("main")
+  ownerId       String
+  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  reviews       Review[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([createdAt])
+}
+
+model Review {
+  id                String          @id @default(cuid())
+  projectId         String
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commitSha         String?
+  pullRequestNumber Int?
+  status            ReviewStatus
+  score             Int?
+  summary           String?
+  errorMessage      String?
+  criticalCount     Int             @default(0)
+  warningCount      Int             @default(0)
+  suggestionCount   Int             @default(0)
+  totalIssues       Int             @default(0)
+  inputType         ReviewInputType
+  inputContent      String
+  language          String?
+  createdAt         DateTime        @default(now())
+  completedAt       DateTime?
+  findings          ReviewFinding[]
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model ReviewFinding {
+  id            String          @id @default(cuid())
+  reviewId      String
+  review        Review          @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  severity      FindingSeverity
+  category      FindingCategory
+  title         String
+  description   String
+  whyItMatters  String?
+  suggestedFix  String?
+  filePath      String
+  startLine     Int
+  endLine       Int
+  codeBefore    String?
+  codeAfter     String?
+  resolved      Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+
+  @@index([reviewId])
+  @@index([severity])
+  @@index([category])
+}
