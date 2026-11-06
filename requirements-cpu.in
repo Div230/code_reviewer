@@ -2,7 +2,7 @@
 # CPU-only interface tests; no quantized training, CUDA packages or model downloads.
 torch==2.14.1+cpu
 transformers==5.20.2
-trl==1.16.0
+trl==1.17.1
 peft==0.21.2
 datasets==5.1.0
 fsspec==2026.7.0

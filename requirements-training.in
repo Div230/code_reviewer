@@ -2,7 +2,7 @@
 # Unsloth is optional and excluded from this audited lock; see docs/training.md.
 torch==2.14.1
 transformers==5.20.2
-trl==1.16.0
+trl==1.17.1
 peft==0.21.2
 datasets==5.1.0
 # Security floor for Datasets' filesystem dependency (old lock retained a vulnerable version).
